@@ -203,11 +203,15 @@ package body Ada_Gen is
                J := J + 1;
 
             elsif Valid_Index (J + 1)
-              and then Slice (Text, J, J + 1) = "\n" then
+              and then Slice (Text, J, J + 1) = "\n"
+            then
                --  New line delimiter in the input license text
 
                --  Skip it
                J := J + 2;
+
+               --  Trim trailing whitespace
+               Trim (G_License_Text, Right);
 
                --  Start new line in the output
                Append (G_License_Text, ASCII.LF);
@@ -227,6 +231,9 @@ package body Ada_Gen is
             end if;
          end loop Line_Loop;
       end loop;
+
+      --  Trim trailing whitespace
+      Trim (G_License_Text, Right);
    end Set_License_Text;
 
    --------------
@@ -280,7 +287,8 @@ package body Ada_Gen is
             then
                Ada.Text_IO.Put_Line
                  (F,
-                  Pre & "--  " & Slice (Comment.Comment, First, Last_Space - 1));
+                  Pre & "--  " &
+                    Slice (Comment.Comment, First, Last_Space - 1));
                First := Last_Space + 1;
             end if;
          end loop;
@@ -707,13 +715,13 @@ package body Ada_Gen is
 
       Ada.Text_IO.Put_Line
         (File, "   for " & To_String (Element.Id) & " use record");
+
       for F of Element.Fields loop
          if F.Offset /= 0 then
             As_Hex := True;
             exit;
          end if;
       end loop;
-
 
       for F of Element.Fields loop
          Ada.Text_IO.Put (File, (1 .. 6 => ' '));
@@ -979,7 +987,7 @@ package body Ada_Gen is
 
       if Length (G_Withed_All) /= 0 then
          Spec.With_Clauses.Insert
-           (To_STring (G_Withed_All), False);
+           (To_String (G_Withed_All), False);
       end if;
 
       return Spec;
@@ -1010,19 +1018,6 @@ package body Ada_Gen is
    begin
       return Spec.Id;
    end Id;
-
-   -----------------------------
-   -- Is_Interfaces_Hierarchy --
-   -----------------------------
-
-   function Is_Interfaces_Hierarchy
-     (Spec : Ada_Spec) return Boolean
-   is
-   begin
-      return Length (Spec.Id) > 10
-        and then Ada.Characters.Handling.To_Lower
-          (Slice (Spec.Id, 1, 11)) = "interfaces.";
-   end Is_Interfaces_Hierarchy;
 
    ---------------------
    -- Add_Global_With --
@@ -1178,7 +1173,7 @@ package body Ada_Gen is
 
             Ada.Text_IO.New_Line (F);
             G_Empty_Line := False;
-            With_maps.Next (Curs);
+            With_Maps.Next (Curs);
          end;
       end loop;
 
@@ -1230,7 +1225,7 @@ package body Ada_Gen is
 
       if Spec.With_Clauses.Contains (With_Pkg) then
          if Elt.Add_Use_Clause then
-            -- Make sure we have use visibility for this package
+            --  Make sure we have use visibility for this package
             Spec.With_Clauses.Replace (With_Pkg, True);
          end if;
 
@@ -1424,7 +1419,7 @@ package body Ada_Gen is
       is
          Ret     : String (Str'Range);
          Idx     : Natural := Ret'First;
-         Prev    : character := ' ';
+         Prev    : Character := ' ';
          Current : Character := ' ';
       begin
          for J in Str'Range loop
@@ -1715,7 +1710,7 @@ package body Ada_Gen is
       return Ret;
    end Get_Boolean;
 
-    -------------------
+   -------------------
    -- New_Type_Enum --
    -------------------
 
@@ -1759,7 +1754,7 @@ package body Ada_Gen is
    begin
       for J in Camel_C'Range loop
          if First then
-           if Camel_C (J) in 'a' .. 'z' then
+            if Camel_C (J) in 'a' .. 'z' then
                Camel_C (J) := Ada.Characters.Handling.To_Upper (Camel_C (J));
             elsif Camel_C (J) in 'A' .. 'Z' then
                First := False;
@@ -1774,7 +1769,7 @@ package body Ada_Gen is
          end if;
       end loop;
 
-      The_Id := Ada_Identifier (Camel_C, To_String (Enum.Id));
+      The_Id := Ada_Identifier (Camel_C, "Val");
 
       --  Check duplicated names
       Suffix := 0;
@@ -1869,7 +1864,7 @@ package body Ada_Gen is
    is
    begin
       return Elt.Id;
-   end id;
+   end Id;
 
    ---------
    -- "=" --
@@ -2177,7 +2172,7 @@ package body Ada_Gen is
         (Id           => Ada_Identifier (Id, "Rec"),
          Comment      => New_Comment (Comment, Strip => True),
          Aspects      => <>,
-         Disc_name    => To_Unbounded_String (Disc_Name),
+         Disc_Name    => To_Unbounded_String (Disc_Name),
          Discriminent => Ada_Type_Enum (Disc_Type),
          Fields       => <>,
          Disc_Fields  => <>,
@@ -2351,5 +2346,21 @@ package body Ada_Gen is
          Add (Spec, New_With_Clause ("System"));
       end if;
    end Added_In_Spec;
+
+   -----------------
+   -- Starts_With --
+   -----------------
+
+   function Starts_With (S1, S2 : String) return Boolean
+   is (S1'Length >= S2'Length
+       and then S1 (S1'First .. S1'First + S2'Length - 1) = S2);
+
+   ---------------
+   -- Ends_With --
+   ---------------
+
+   function Ends_With (S1, S2 : String) return Boolean
+   is (S1'Length >= S2'Length
+       and then S1 (S1'Last - S2'Length + 1 .. S1'Last) = S2);
 
 end Ada_Gen;

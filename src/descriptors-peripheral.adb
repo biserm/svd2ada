@@ -2,7 +2,7 @@
 --                                                                          --
 --                          SVD Binding Generator                           --
 --                                                                          --
---                    Copyright (C) 2015-2016, AdaCore                      --
+--                    Copyright (C) 2015-2018, AdaCore                      --
 --                                                                          --
 -- SVD2Ada is free software;  you can  redistribute it  and/or modify it    --
 -- under terms of the  GNU General Public License as published  by the Free --
@@ -25,6 +25,7 @@ with DOM.Core.Elements;  use DOM.Core.Elements;
 with DOM.Core.Nodes;
 
 with Ada_Gen;            use Ada_Gen;
+with SVD2Ada_Utils;
 
 package body Descriptors.Peripheral is
 
@@ -202,9 +203,10 @@ package body Descriptors.Peripheral is
                                     Ret.Reg_Properties,
                                     Ret);
 
-                                 if Register.Dim > 1
-                                   and then Register.Dim_Increment /=
-                                     Register.Reg_Properties.Size / 8
+                                 if not SVD2Ada_Utils.Gen_Arrays
+                                   or else (Register.Dim > 1
+                                            and then Register.Dim_Increment /=
+                                              Register.Reg_Properties.Size / 8)
                                  then
                                     --  in such case, this certainly indicates
                                     --  two intertwined arrays of registers, We
@@ -261,7 +263,7 @@ package body Descriptors.Peripheral is
    begin
       for Elt of Db.Content loop
          if Elt.Kind = Register_Element
-           and then Ada.Strings.Unbounded.To_String (Elt.Reg.XML_Id) = XML_Id
+           and then Ada.Strings.Unbounded.To_String (Elt.Reg.Xml_Id) = XML_Id
          then
             return Elt.Reg;
          end if;
@@ -314,7 +316,9 @@ package body Descriptors.Peripheral is
 
       Added := False;
 
-      for J in 1 .. Integer (Peripheral_Element_Vectors.Length (Periph.Content)) loop
+      for J in 1 ..
+        Integer (Peripheral_Element_Vectors.Length (Periph.Content))
+      loop
          case Periph.Content (J).Kind is
             when Register_Element =>
                if Periph.Content (J).Reg.Address_Offset > Offset then
@@ -393,9 +397,10 @@ package body Descriptors.Peripheral is
                Typ        => Get_Ada_Type (Elt.Reg),
                Offset     => Elt.Reg.Address_Offset,
                LSB        => 0,
-               MSB        => (if Elt.Reg.Dim = 1
-                              then Elt.Reg.Reg_Properties.Size - 1
-                              else Elt.Reg.Dim * Elt.Reg.Dim_Increment * 8 - 1),
+               MSB        =>
+                 (if Elt.Reg.Dim = 1
+                  then Elt.Reg.Reg_Properties.Size - 1
+                  else Elt.Reg.Dim * Elt.Reg.Dim_Increment * 8 - 1),
                Is_Aliased => True,
                Comment    => To_String (Elt.Reg.Description));
 
@@ -422,9 +427,10 @@ package body Descriptors.Peripheral is
                      Typ        => Get_Ada_Type (Elt.Reg),
                      Offset     => Elt.Reg.Address_Offset,
                      LSB        => 0,
-                     MSB        => (if Elt.Reg.Dim = 1
-                                    then Elt.Reg.Reg_Properties.Size - 1
-                                    else Elt.Reg.Dim * Elt.Reg.Dim_Increment * 8 - 1),
+                     MSB        =>
+                       (if Elt.Reg.Dim = 1
+                        then Elt.Reg.Reg_Properties.Size - 1
+                        else Elt.Reg.Dim * Elt.Reg.Dim_Increment * 8 - 1),
                      Is_Aliased => True,
                      Comment    => To_String (Elt.Reg.Description));
                when Cluster_Element =>
@@ -434,7 +440,8 @@ package body Descriptors.Peripheral is
                      Typ        => Type_Holders.Element (Elt.Cluster.Ada_Type),
                      Offset     => Elt.Cluster.Address_Offset,
                      LSB        => 0,
-                     MSB        => Get_Size (Elt.Cluster.all) * Elt.Cluster.Dim - 1,
+                     MSB        =>
+                        Get_Size (Elt.Cluster.all) * Elt.Cluster.Dim - 1,
                      Is_Aliased => True,
                      Comment    => To_String (Elt.Cluster.Description));
             end case;
@@ -592,10 +599,7 @@ package body Descriptors.Peripheral is
                begin
                   Add_Aspect (Inst, "Import");
                   Add_Address_Aspect
-                    (Inst,
-                     "System'To_Address (" &
-                       To_Hex (First.Base_Address) & ")");
---                Add_Address_Aspect (Inst, To_String (First.Name) & "_Base");
+                    (Inst, To_String (First.Name) & "_Base");
                   Add (Spec, Inst);
                end;
 
@@ -615,11 +619,7 @@ package body Descriptors.Peripheral is
                   begin
                      Add_Aspect (Inst, "Import");
                      Add_Address_Aspect
-                       (Inst,
-                        "System'To_Address (" &
-                          To_Hex (Periph.Base_Address) & ")");
---                       Add_Address_Aspect
---                         (Inst, To_String (Periph.Name) & "_Base");
+                       (Inst, To_String (Periph.Name) & "_Base");
                      Add (Spec, Inst);
                   end;
                end loop;
@@ -641,11 +641,7 @@ package body Descriptors.Peripheral is
                   begin
                      Add_Aspect (Inst, "Import");
                      Add_Address_Aspect
-                       (Inst,
-                        "System'To_Address (" &
-                          To_Hex (Periph.Base_Address) & ")");
---                       Add_Address_Aspect
---                         (Inst, To_String (Periph.Name) & "_Base");
+                       (Inst, To_String (Periph.Name) & "_Base");
                      Add (Spec, Inst);
                   end;
                end loop;

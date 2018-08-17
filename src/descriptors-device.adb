@@ -33,6 +33,16 @@ package body Descriptors.Device is
    package Interrupt_Sort is new Interrupt_Vectors.Generic_Sorting
      (Base_Types."<");
 
+   procedure Dump_Handler_ASM
+     (Device     : Device_T;
+      Ints       : Interrupt_Vectors.Vector;
+      Output_Dir : String);
+
+   procedure Dump_IRQ_Support
+     (Device : Device_T;
+      Output_Dir : String);
+   --  Dump the IRQ names and trap handlers
+
    -----------------
    -- Read_Device --
    -----------------
@@ -316,39 +326,27 @@ package body Descriptors.Device is
       Close (ASM);
    end Dump_Handler_ASM;
 
-   ----------
-   -- Dump --
-   ----------
+   ----------------------
+   -- Dump_IRQ_Support --
+   ----------------------
 
-   procedure Dump
-     (Device     : Device_T;
+   procedure Dump_IRQ_Support
+     (Device : Device_T;
       Output_Dir : String)
    is
-      Peripherals : Peripheral_Vectors.Vector;
-      Interrupts  : Interrupt_Vectors.Vector;
-      Spec        : Ada_Gen.Ada_Spec :=
-                      New_Spec (To_String (Device.Name),
-                                To_String (Device.Description),
-                                True);
-      Old_Spec    : Ada_Gen.Ada_Spec;
-      Max_Len     : Natural := 0;
-      Gen_RT_IRQ  : constant Boolean := Is_Interfaces_Hierarchy (Spec);
-      --  Whether we generate Run-Time support files for IRQ handling
-      --  This is activated when generating in the Interfaces hierarchy
+      Spec       : Ada_Gen.Ada_Spec;
+      Interrupts : Interrupt_Vectors.Vector;
+      Max_Len    : Natural := 0;
 
    begin
-      ----------------
-      -- Interrupts --
-      ----------------
-
-      if Gen_RT_IRQ then
-         Old_Spec := Spec;
+      if SVD2Ada_Utils.In_Runtime then
          --  When generating stubs for the Interfaces run-time hierarchy, also
          --  generate the Ada.Exceptions.Name file from the interrupts list
          Spec := New_Spec ("Ada.Interrupts.Names",
                            "This is a version for the " &
                              To_String (Device.Description) & " MCU",
                            False);
+
          Add (Spec,
               New_Pragma
                 ("Implementation_Defined",
@@ -362,8 +360,8 @@ package body Descriptors.Device is
              Value       => -1));
 
          if Slice (Device.Description, 1, 5) = "STM32"
-	    and then Slice (Device.Description, 6, 7) /= "F0"
-	 then
+           and then Slice (Device.Description, 6, 7) /= "F0"
+         then
             --  ??? Workaround for the STM32F* svd files that do not define the
             --  FPU Interrupt. The STM32F0 series do not have an FPU.
             Interrupts.Append
@@ -374,12 +372,10 @@ package body Descriptors.Device is
          end if;
 
       else
-         Old_Spec := Spec;
          Spec := New_Child_Spec ("Interrupts",
                                  To_String (Device.Name),
                                  "Definition of the device's interrupts",
                                  False);
-         Add (Spec, New_With_Clause ("Ada.Interrupts", True));
       end if;
 
       Add (Spec, New_Comment_Box ("Interrupts"));
@@ -395,36 +391,61 @@ package body Descriptors.Device is
 
       Interrupt_Sort.Sort (Interrupts);
 
-      for Int of Interrupts loop
-         if Length (Int.Name) > 4
-           and then Slice (Int.Name, Length (Int.Name) - 3,
-                           Length (Int.Name)) = "_IRQ"
-         then
-            Add (Spec,
-                 New_Constant_Value
-                   (Id       => Slice (Int.Name, 1, Length (Int.Name) - 4) &
-                                  "_Interrupt",
-                    Align_Id => Max_Len + 11,
-                    Typ      => "Interrupt_ID",
-                    Value    => To_String (Int.Value),
-                    Comment  => To_String (Int.Description)));
-         else
-            Add (Spec,
-                 New_Constant_Value
-                   (Id       => To_String (Int.Name) & "_Interrupt",
-                    Align_Id => Max_Len + 11,
-                    Typ      => "Interrupt_ID",
-                    Value    => To_String (Int.Value),
-                    Comment  => To_String (Int.Description)));
-         end if;
-      end loop;
+      declare
+         Typ : constant String :=
+                 (if SVD2Ada_Utils.In_Runtime then "Interrupt_ID" else "");
+         --  When generating code for the run-time, we use the
+         --  Ada.Interrupts.Interrupt_ID type. Otherwise, the interrupts are
+         --  declared as named number to avoid dependency on Ada.Interrupts
+         --  that may not be available, for instance when using ZFP
+         --  run-time.
+      begin
+         for Int of Interrupts loop
+            declare
+               Id : constant String :=
+                      (if Ends_With (To_String (Int.Name), "_IRQ")
+                       then Slice (Int.Name, 1, Length (Int.Name) - 4)
+                       else To_String (Int.Name));
+               --  Remove the trailing _IRQ of the interrupt name, if any
+            begin
+               Add (Spec,
+                    New_Constant_Value
+                      (Id       => Id & "_Interrupt",
+                       Align_Id => Max_Len + 11,
+                       Typ      => Typ,
+                       Value    => To_String (Int.Value),
+                       Comment  => To_String (Int.Description)));
+            end;
+         end loop;
+      end;
 
-      if Gen_RT_IRQ then
-         Ada_Gen.Write_Spec (Spec, Output_Dir);
-         Dump_Handler_ASM (Device, Interrupts, Output_Dir);
+      Ada_Gen.Write_Spec (Spec, Output_Dir);
+
+      Dump_Handler_ASM (Device, Interrupts, Output_Dir);
+   end Dump_IRQ_Support;
+
+   ----------
+   -- Dump --
+   ----------
+
+   procedure Dump
+     (Device     : Device_T;
+      Output_Dir : String)
+   is
+      Peripherals : Peripheral_Vectors.Vector;
+      Spec        : Ada_Gen.Ada_Spec :=
+                      New_Spec (To_String (Device.Name),
+                                To_String (Device.Description),
+                                True);
+
+   begin
+      ----------------
+      -- Interrupts --
+      ----------------
+
+      if SVD2Ada_Utils.Gen_IRQ_Support then
+         Dump_IRQ_Support (Device, Output_Dir);
       end if;
-
-      Spec := Old_Spec;
 
       ----------------------------
       --  Base types definition --
